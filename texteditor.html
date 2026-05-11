@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>TabPad - Multi-Tab Editor with Undo & Save</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(145deg, #e0e5ec 0%, #f0f4fa 100%);
+            font-family: 'Segoe UI', Roboto, 'Fira Code', 'Cascadia Code', monospace;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 24px;
+        }
+
+        .editor-container {
+            background: #fefefe;
+            border-radius: 32px;
+            box-shadow: 0 25px 45px -12px rgba(0,0,0,0.35), inset 0 1px 1px rgba(255,255,255,0.6);
+            width: 100%;
+            max-width: 1100px;
+            height: 85vh;
+            min-height: 540px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .tab-bar {
+            background: #f1f5f9;
+            padding: 8px 12px 0 12px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            gap: 6px;
+            border-bottom: 1px solid #cbd5e1;
+            overflow-x: auto;
+            scrollbar-width: thin;
+            flex-shrink: 0;
+        }
+
+        .tab {
+            background: #e2e8f0;
+            border-radius: 16px 16px 8px 8px;
+            padding: 8px 18px 8px 18px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            font-family: 'Segoe UI', system-ui;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: #1e293b;
+            white-space: nowrap;
+        }
+
+        .tab.active {
+            background: white;
+            border-bottom: 2px solid #3b82f6;
+            color: #0f172a;
+            font-weight: 700;
+        }
+
+        .tab:hover:not(.active) {
+            background: #cbd5e1;
+        }
+
+        .tab-close {
+            background: none;
+            border: none;
+            font-size: 1.3rem;
+            line-height: 1;
+            cursor: pointer;
+            padding: 0 4px;
+            border-radius: 30px;
+            color: #64748b;
+            font-weight: bold;
+        }
+
+        .tab-close:hover {
+            background: #ef4444;
+            color: white;
+        }
+
+        .new-tab-btn {
+            background: #d9e2ef;
+            border: none;
+            border-radius: 40px;
+            padding: 6px 16px;
+            font-weight: bold;
+            font-size: 1.1rem;
+            cursor: pointer;
+            color: #1e293b;
+            margin-left: 6px;
+            margin-bottom: 4px;
+        }
+
+        .new-tab-btn:hover {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .toolbar {
+            background: #f8fafc;
+            padding: 10px 18px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+            border-bottom: 1px solid #e2e8f0;
+            flex-shrink: 0;
+        }
+
+        button.action-btn {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 28px;
+            padding: 6px 20px;
+            font-weight: 600;
+            font-family: inherit;
+            font-size: 0.9rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: 0.1s linear;
+            color: #1f3a5f;
+        }
+
+        button.action-btn:hover {
+            background: #eef2ff;
+            border-color: #94a3b8;
+            transform: translateY(-1px);
+        }
+
+        button.action-btn:active {
+            transform: translateY(1px);
+        }
+
+        .info-status {
+            margin-left: auto;
+            font-size: 0.75rem;
+            color: #475569;
+            background: #eef2ff;
+            padding: 5px 12px;
+            border-radius: 40px;
+            font-family: monospace;
+        }
+
+        .text-area {
+            flex: 1;
+            width: 100%;
+            background: #ffffff;
+            padding: 20px 24px;
+            overflow-y: auto;
+        }
+
+        .editor-content {
+            width: 100%;
+            height: 100%;
+            outline: none;
+            font-size: 1rem;
+            line-height: 1.5;
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            color: #0f172a;
+            background: white;
+            min-height: 300px;
+            overflow-y: auto;
+            caret-color: #3b82f6;
+        }
+
+        .editor-content:focus {
+            outline: none;
+        }
+
+        .editor-content:empty:before {
+            content: attr(placeholder);
+            color: #94a3b8;
+            font-style: italic;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #b9c3d0;
+            border-radius: 10px;
+        }
+
+        .footer-note {
+            font-size: 0.7rem;
+            background: #f9f9fb;
+            text-align: center;
+            padding: 6px;
+            color: #5b6e8c;
+            border-top: 1px solid #eef2f8;
+        }
+    </style>
+</head>
+<body>
+<div class="editor-container">
+    <div class="tab-bar" id="tabBar"></div>
+    <div class="toolbar">
+        <button class="action-btn" id="undoBtn" title="Undo (Ctrl+Z)">↩️ Undo</button>
+        <button class="action-btn" id="saveBtn" title="Save current tab as .txt file">💾 Save Tab</button>
+        <div class="info-status" id="undoStatus">✅ ready</div>
+    </div>
+    <div class="text-area">
+        <div id="editorContent" class="editor-content" contenteditable="true" placeholder="Start typing..."></div>
+    </div>
+    <div class="footer-note">
+        💾 Multi‑tab | Each tab has independent undo history | Click Save to download active tab's text
+    </div>
+</div>
+
+<script>
+    // ---------- UNDO MANAGER PER TAB ----------
+    class TabData {
+        constructor(id, name, content = "") {
+            this.id = id;
+            this.name = name;
+            this.content = content;
+            this.undoStack = [content];
+            this.redoStack = [];
+            this.isLock = false;
+        }
+        
+        pushState(newContent) {
+            if (this.isLock) return;
+            const last = this.undoStack[this.undoStack.length - 1];
+            if (last === newContent) return;
+            this.undoStack.push(newContent);
+            this.redoStack = [];
+            if (this.undoStack.length > 100) this.undoStack.shift();
+        }
+        
+        canUndo() {
+            return this.undoStack.length > 1;
+        }
+        
+        undo() {
+            if (!this.canUndo()) return null;
+            const current = this.undoStack.pop();
+            this.redoStack.push(current);
+            return this.undoStack[this.undoStack.length - 1];
+        }
+        
+        syncFromEditor(rawText) {
+            if (this.isLock) return;
+            if (this.content === rawText) return;
+            this.pushState(rawText);
+            this.content = rawText;
+        }
+        
+        applyUndo() {
+            const prev = this.undo();
+            if (prev !== null) {
+                this.content = prev;
+                return prev;
+            }
+            return null;
+        }
+        
+        absorbContentWithoutRecording(text) {
+            this.content = text;
+        }
+    }
+    
+    // ---------- GLOBAL STATE ----------
+    let tabs = [];
+    let activeTabId = null;
+    let nextTabId = 1;
+    
+    const tabBarDiv = document.getElementById('tabBar');
+    const editorDiv = document.getElementById('editorContent');
+    const undoBtn = document.getElementById('undoBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const undoStatusSpan = document.getElementById('undoStatus');
+    
+    function setStatusMessage(msg, isError = false) {
+        undoStatusSpan.textContent = msg;
+        undoStatusSpan.style.color = isError ? '#b91c1c' : '#2d6a4f';
+        setTimeout(() => {
+            if (undoStatusSpan.textContent === msg) {
+                undoStatusSpan.style.color = '#475569';
+                undoStatusSpan.textContent = '✅ ready';
+            }
+        }, 1800);
+    }
+    
+    function captureCurrentEditorContent() {
+        if (!activeTabId) return "";
+        return editorDiv.innerText;
+    }
+    
+    function flushEditorToActiveTab(recordUndo = true) {
+        if (!activeTabId) return;
+        const activeTab = tabs.find(t => t.id === activeTabId);
+        if (!activeTab) return;
+        const currentRaw = editorDiv.innerText;
+        if (recordUndo && activeTab.content !== currentRaw) {
+            activeTab.syncFromEditor(currentRaw);
+        } else if (!recordUndo && activeTab.content !== currentRaw) {
+            activeTab.absorbContentWithoutRecording(currentRaw);
+        }
+        activeTab.content = captureCurrentEditorContent();
+    }
+    
+    function loadTabIntoEditor(tabData) {
+        if (!tabData) return;
+        // Save current tab changes before swapping
+        if (activeTabId) {
+            const oldTab = tabs.find(t => t.id === activeTabId);
+            if (oldTab) {
+                const oldContent = editorDiv.innerText;
+                if (oldTab.content !== oldContent) {
+                    oldTab.syncFromEditor(oldContent);
+                }
+            }
+        }
+        activeTabId = tabData.id;
+        tabData.isLock = true;
+        editorDiv.innerText = tabData.content;
+        tabData.isLock = false;
+        tabData.absorbContentWithoutRecording(tabData.content);
+        updateUndoButtonUI(tabData);
+    }
+    
+    function updateUndoButtonUI(tabData) {
+        if (!tabData) {
+            undoBtn.disabled = true;
+            undoBtn.style.opacity = "0.6";
+            return;
+        }
+        const canUndo = tabData.canUndo();
+        undoBtn.disabled = !canUndo;
+        undoBtn.style.opacity = canUndo ? "1" : "0.6";
+        undoBtn.title = canUndo ? "Undo last change" : "Nothing to undo";
+    }
+    
+    // render tabs bar
+    function renderTabs() {
+        tabBarDiv.innerHTML = '';
+        for (let tab of tabs) {
+            const tabButton = document.createElement('button');
+            tabButton.className = 'tab';
+            if (activeTabId === tab.id) tabButton.classList.add('active');
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = tab.name;
+            nameSpan.style.maxWidth = '150px';
+            nameSpan.style.overflow = 'hidden';
+            nameSpan.style.textOverflow = 'ellipsis';
+            const closeSpan = document.createElement('span');
+            closeSpan.innerHTML = '✕';
+            closeSpan.className = 'tab-close';
+            closeSpan.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteTabById(tab.id);
+            });
+            tabButton.appendChild(nameSpan);
+            tabButton.appendChild(closeSpan);
+            tabButton.addEventListener('click', (e) => {
+                if (e.target === closeSpan) return;
+                switchToTab(tab.id);
+            });
+            tabBarDiv.appendChild(tabButton);
+        }
+        const newBtn = document.createElement('button');
+        newBtn.textContent = '+ New tab';
+        newBtn.className = 'new-tab-btn';
+        newBtn.addEventListener('click', () => createNewTab());
+        tabBarDiv.appendChild(newBtn);
+    }
+    
+    function switchToTab(tabId) {
+        const targetTab = tabs.find(t => t.id === tabId);
+        if (!targetTab || activeTabId === tabId) return;
+        if (activeTabId) {
+            const currentActive = tabs.find(t => t.id === activeTabId);
+            if (currentActive) {
+                const currentText = editorDiv.innerText;
+                if (currentActive.content !== currentText) {
+                    currentActive.syncFromEditor(currentText);
+                }
+            }
+        }
+        loadTabIntoEditor(targetTab);
+        renderTabs();
+        editorDiv.focus();
+        setStatusMessage(`Switched to "${targetTab.name}"`);
+    }
+    
+    function createNewTab(content = "", customName = null) {
+        const newId = (nextTabId++).toString();
+        const defaultName = customName ? customName : `Tab ${newId}`;
+        const newTab = new TabData(newId, defaultName, content);
+        tabs.push(newTab);
+        switchToTab(newTab.id);
+        renderTabs();
+        setStatusMessage(`✨ New tab "${newTab.name}" created`);
+        editorDiv.focus();
+    }
+    
+    function deleteTabById(tabId) {
+        if (tabs.length === 1) {
+            setStatusMessage("⚠️ Cannot delete last tab. Create another tab first.", true);
+            return;
+        }
+        const index = tabs.findIndex(t => t.id === tabId);
+        if (index === -1) return;
+        const isActive = (activeTabId === tabId);
+        const deletedName = tabs[index].name;
+        tabs.splice(index, 1);
+        if (isActive) {
+            const newActive = tabs[0];
+            if (newActive) {
+                activeTabId = null;
+                loadTabIntoEditor(newActive);
+            } else if (tabs.length) {
+                loadTabIntoEditor(tabs[0]);
+            } else {
+                createNewTab();
+            }
+        }
+        renderTabs();
+        const currentTab = tabs.find(t => t.id === activeTabId);
+        if (currentTab) updateUndoButtonUI(currentTab);
+        setStatusMessage(`❌ Closed "${deletedName}"`);
+        editorDiv.focus();
+    }
+    
+    // UNDO action
+    function performUndo() {
+        if (!activeTabId) {
+            setStatusMessage("No active tab", true);
+            return;
+        }
+        const activeTab = tabs.find(t => t.id === activeTabId);
+        if (!activeTab || !activeTab.canUndo()) {
+            setStatusMessage("Nothing to undo", true);
+            return;
+        }
+        const previousContent = activeTab.applyUndo();
+        if (previousContent !== null) {
+            activeTab.isLock = true;
+            editorDiv.innerText = previousContent;
+            activeTab.content = previousContent;
+            activeTab.isLock = false;
+            setStatusMessage("↩️ Undo performed");
+            updateUndoButtonUI(activeTab);
+            editorDiv.focus();
+            // set cursor at end
+            const range = document.createRange();
+            const sel = window.getSelection();
+            if (editorDiv.childNodes.length) {
+                range.selectNodeContents(editorDiv);
+                range.collapse(false);
+                sel?.removeAllRanges();
+                sel?.addRange(range);
+            }
+        } else {
+            setStatusMessage("Undo failed", true);
+        }
+    }
+    
+    // ---------- SAVE FUNCTION (download current tab as .txt) ----------
+    function saveCurrentTabAsFile() {
+        if (!activeTabId) {
+            setStatusMessage("No active tab to save", true);
+            return;
+        }
+        const activeTab = tabs.find(t => t.id === activeTabId);
+        if (!activeTab) return;
+        
+        // Ensure editor content is flushed to tab data (just in case)
+        const freshContent = editorDiv.innerText;
+        if (activeTab.content !== freshContent) {
+            activeTab.syncFromEditor(freshContent);
+        }
+        const textToSave = activeTab.content;
+        // Create a sanitized filename from tab name
+        let baseName = activeTab.name.replace(/[\\/*?:"<>|]/g, "").trim();
+        if (baseName === "") baseName = "document";
+        const fileName = `${baseName}.txt`;
+        
+        // Create blob and trigger download
+        const blob = new Blob([textToSave], { type: "text/plain;charset=utf-8" });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        setStatusMessage(`💾 Saved as "${fileName}" (${textToSave.length} chars)`);
+    }
+    
+    // editor input handler (record changes for active tab)
+    function onEditorInput() {
+        if (!activeTabId) return;
+        const activeTab = tabs.find(t => t.id === activeTabId);
+        if (!activeTab || activeTab.isLock) return;
+        const newText = editorDiv.innerText;
+        if (activeTab.content !== newText) {
+            activeTab.syncFromEditor(newText);
+            updateUndoButtonUI(activeTab);
+        }
+    }
+    
+    // optional: rename tab on double click (nice UX)
+    function enableTabRename() {
+        tabBarDiv.addEventListener('dblclick', (e) => {
+            let targetTabElem = e.target.closest('.tab');
+            if (!targetTabElem) return;
+            const closeBtn = e.target.closest('.tab-close');
+            if (closeBtn) return;
+            // find tab id from the UI - we'll retrieve via active checker but we need tab id
+            const tabIndex = Array.from(tabBarDiv.children).indexOf(targetTabElem);
+            if (tabIndex === -1 || tabIndex >= tabs.length) return;
+            const tabData = tabs[tabIndex];
+            const oldName = tabData.name;
+            const newName = prompt("Rename tab:", oldName);
+            if (newName && newName.trim() !== "") {
+                tabData.name = newName.trim().slice(0, 30);
+                renderTabs();
+                setStatusMessage(`Renamed to "${tabData.name}"`);
+            }
+        });
+    }
+    
+    // initialization
+    function initEditor() {
+        // create two default tabs with demo content
+        const defaultTabs = [
+            { name: "📄 Welcome", content: "✨ Welcome to TabPad!\n\n✔ Multi‑tab support\n✔ Each tab has its own undo history\n✔ Click 'Save Tab' to download current content as .txt\n✔ Double‑click any tab to rename it\n✔ Undo via button or Ctrl+Z\n\nEnjoy writing!" },
+            { name: "📝 Notes", content: "This is a second tab.\nWrite anything here.\nThe save button will download the active tab's text as a separate .txt file.\n\nTry creating new tabs!" }
+        ];
+        for (let i = 0; i < defaultTabs.length; i++) {
+            const id = (nextTabId++).toString();
+            const tab = new TabData(id, defaultTabs[i].name, defaultTabs[i].content);
+            tab.undoStack = [defaultTabs[i].content];
+            tabs.push(tab);
+        }
+        activeTabId = tabs[0].id;
+        const firstTab = tabs[0];
+        firstTab.isLock = true;
+        editorDiv.innerText = firstTab.content;
+        firstTab.isLock = false;
+        firstTab.absorbContentWithoutRecording(firstTab.content);
+        renderTabs();
+        updateUndoButtonUI(firstTab);
+        
+        editorDiv.addEventListener('input', onEditorInput);
+        undoBtn.addEventListener('click', performUndo);
+        saveBtn.addEventListener('click', saveCurrentTabAsFile);
+        
+        // keyboard shortcuts: Ctrl+Z for undo
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+                e.preventDefault();
+                performUndo();
+            }
+            // optional Ctrl+S to save the active tab as well (extra user friendly)
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                saveCurrentTabAsFile();
+            }
+        });
+        
+        enableTabRename();
+        editorDiv.focus();
+        const range = document.createRange();
+        const sel = window.getSelection();
+        if (editorDiv.childNodes.length) {
+            range.selectNodeContents(editorDiv);
+            range.collapse(false);
+            sel?.removeAllRanges();
+            sel?.addRange(range);
+        }
+        setStatusMessage("Ready — Save button downloads text");
+    }
+    
+    window.addEventListener('beforeunload', () => {
+        if (activeTabId) {
+            const active = tabs.find(t => t.id === activeTabId);
+            if (active) active.content = editorDiv.innerText;
+        }
+    });
+    
+    initEditor();
+</script>
+</body>
+</html>
+```
